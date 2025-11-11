@@ -1,0 +1,82 @@
+close all; clear; clc;
+
+% 加载数据
+load('IMU_1107_1549_Recorder1_20251107141152.mat');
+% load('D:/C607/传感器/data/IMU_1031_1610_Recorder1_20251031160728/IMU_1031_1610_Recorder1_20251031160728.mat');
+
+% 提取原始数据
+accel_x = CANFDMessage__acceleration_mg_0(:, 2);
+accel_y = CANFDMessage__acceleration_mg_1(:, 2);
+accel_z = CANFDMessage__acceleration_mg_2(:, 2);
+
+gyro_x = CANFDMessage__angular_rate_mdps_0(:, 2);
+gyro_y = CANFDMessage__angular_rate_mdps_1(:, 2);
+gyro_z = CANFDMessage__angular_rate_mdps_2(:, 2);
+
+% 计算原始时间（从时间戳转换）
+time_original = CANFDMessage__AMS330_Timestamp(:, 2) * 25e-6;
+
+% --------------------------
+% 关键步骤：处理重复的时间戳
+% --------------------------
+% 查找重复时间点的索引
+[~, unique_idx] = unique(time_original, 'first');  % 保留第一个出现的时间点
+% 按时间排序并去重
+sorted_idx = sort(unique_idx);
+time_unique = time_original(sorted_idx);
+accel_x_unique = accel_x(sorted_idx);
+accel_y_unique = accel_y(sorted_idx);
+accel_z_unique = accel_z(sorted_idx);
+gyro_x_unique = gyro_x(sorted_idx);
+gyro_y_unique = gyro_y(sorted_idx);
+gyro_z_unique = gyro_z(sorted_idx);
+
+% 计算时间间隔，检测异常点（时间间隔过大视为数据缺失）
+dt = diff(time_unique);
+threshold = 0.02;  % 时间间隔阈值，超过此值视为缺失
+if isempty(dt)
+    error('数据点太少，无法处理');
+end
+
+% 估计正常采样频率（基于正常的时间间隔）
+valid_dt = dt(dt <= threshold );
+if isempty(valid_dt)
+    fs_estimated = 1 / mean(dt);  % 如果所有间隔都异常，用整体均值
+else
+    fs_estimated = 1 / mean(valid_dt);
+end
+
+% 创建完整的时间向量（均匀采样）
+t_start = time_unique(1);
+t_end = time_unique(end);
+t_full = t_start:1/fs_estimated:t_end;  % 均匀时间轴
+
+% 插值补充缺失数据（此时时间点已唯一，可安全插值）
+accel_x_interp = interp1(time_unique, accel_x_unique, t_full, 'linear');
+accel_y_interp = interp1(time_unique, accel_y_unique, t_full, 'linear');
+accel_z_interp = interp1(time_unique, accel_z_unique, t_full, 'linear');
+
+gyro_x_interp = interp1(time_unique, gyro_x_unique, t_full, 'linear');
+gyro_y_interp = interp1(time_unique, gyro_y_unique, t_full, 'linear');
+gyro_z_interp = interp1(time_unique, gyro_z_unique, t_full, 'linear');
+
+% 单位转换（mg -> g，mdps -> dps）
+accel = [accel_x_interp'; accel_y_interp'; accel_z_interp'] * 1e-3;
+gyro = [gyro_x_interp'; gyro_y_interp'; gyro_z_interp'] * 1e-3;
+
+% 时间起点归零
+time = t_full - t_full(1);
+
+% 计算实际采样频率
+fs = 1 / mean(diff(time));
+
+% 整合数据
+accel_with_time = [time'; accel];
+gyro_with_time = [time'; gyro];
+
+% 显示处理结果
+fprintf('数据处理完成！\n');
+fprintf('原始数据点数: %d\n', length(time_original));
+fprintf('去重后数据点数: %d\n', length(time_unique));
+fprintf('插值后数据点数: %d\n', length(time));
+fprintf('采样频率: %.2f Hz\n', fs);

@@ -1,5 +1,5 @@
 % load('sensor_data_with_errors');
-load('imu_rotation_data_with_errors.mat');
+% load('imu_rotation_data_with_errors.mat');
 
 time_acc = accel_with_error_time(1, :);
 accel_raw_x = accel_with_error_time(2, :);
@@ -34,5 +34,12 @@ a_zp = accel_raw_z;
 omega_x = gyro_raw_x;
 omega_y = gyro_raw_y;
 omega_z = gyro_raw_z;
+% a_xp = accel_raw_x + offset_acc_x;
+% a_yp = accel_raw_y + offset_acc_y;
+% a_zp = accel_raw_z + offset_acc_z;
+% omega_x = gyro_raw_x + offset_gyro_x;
+% omega_y = gyro_raw_y + offset_gyro_y;
+% omega_z = gyro_raw_z + offset_gyro_z;
+fs = 1 / mean(diff(time_acc));
 
-save('Preprocessed_Data.mat', 'a_xp', 'a_yp', 'a_zp', 'omega_x', 'omega_y', 'omega_z', 'time_acc', 'time_gyro');
+save('Preprocessed_Data.mat', 'a_xp', 'a_yp', 'a_zp', 'omega_x', 'omega_y', 'omega_z', 'time_acc', 'time_gyro', 'fs');

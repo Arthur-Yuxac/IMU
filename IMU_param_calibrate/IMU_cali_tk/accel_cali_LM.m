@@ -43,7 +43,7 @@ K_a = diag([s_x_a, s_y_a, s_z_a]);
 b_a = [b_x_a; b_y_a; b_z_a];
 
 a_S_matrix = [a_xp; a_yp; a_zp];
-calib_acc = T_a * K_a * (a_S_matrix + b_a * ones(1, total_sample));
+calib_acc = T_a * K_a * (a_S_matrix - b_a * ones(1, total_sample));
 
 static_calib_acc = calib_acc(:, static_indices);
 static_mag = sqrt(sum(static_calib_acc.^2, 1));
@@ -78,3 +78,4 @@ function [residual] = accCalibCost(theta, selectedAccData)
         residual(i) = 1^2 - norm(a_O)^2;
     end
 end
+

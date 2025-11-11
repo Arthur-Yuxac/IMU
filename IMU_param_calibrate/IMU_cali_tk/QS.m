@@ -6,10 +6,10 @@ a_xp = a_xp(1:total_sample);
 a_yp = a_yp(1:total_sample);
 a_zp = a_zp(1:total_sample);
 
-w_d = 889;
+w_d = fs+1;
 half_w_d = floor(w_d / 2);
 max_times_the_var = 10;
-init_static_samples = 3000;
+init_static_samples = fs * 3;
 
 var_x_init = var(a_xp(1:init_static_samples));
 var_y_init = var(a_yp(1:init_static_samples));
@@ -58,7 +58,7 @@ for times_the_var = 1 : max_times_the_var
 end
 
 [min_res, min_idx] = min(res_norm_vector(10, :));
-threshold_opt = 3 * res_norm_vector(11, min_idx);
+threshold_opt = 3 * res_norm_vector(11, min_idx);  %判断静态条件，可放缩
 s_filter = zeros(1, total_sample);
 for i = half_w_d : (total_sample - half_w_d)
     if s_square(i) < threshold_opt
@@ -83,7 +83,7 @@ legend('加速度计x轴', '静态区间（放大500倍）'); title('静态区�
 disp('脚本2：静态区间检测完成，结果已保存至 Static_Detection_Result.mat');
 
 function [residual] = accCostFunct(theta, selectedAccData)
-    g_mag = 9.81;
+%     g_mag = 9.81;
     M = size(selectedAccData, 2);
     residual = zeros(M, 1);
 
@@ -95,7 +95,7 @@ function [residual] = accCostFunct(theta, selectedAccData)
 
     for i = 1:M
         a_S = selectedAccData(:, i);
-        a_O = T_a * K_a * (a_S + b_a);
-        residual(i) = g_mag^2 - norm(a_O)^2;
+        a_O = T_a * K_a * (a_S - b_a);
+        residual(i) = 1^2 - norm(a_O)^2;
     end
 end

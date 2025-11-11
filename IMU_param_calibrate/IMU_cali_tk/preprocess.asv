@@ -1,0 +1,44 @@
+% load('sensor_data_with_errors');
+load('imu_rotation_data_with_errors.mat');
+
+time_acc = accel_with_error_time(1, :);
+accel_raw_x = accel_with_error_time(2, :);
+accel_raw_y = accel_with_error_time(3, :);
+accel_raw_z = accel_with_error_time(4, :);
+
+time_gyro = gyro_with_error_time(1, :);
+gyro_raw_x = gyro_with_error_time(2, :);
+gyro_raw_y = gyro_with_error_time(3, :);
+gyro_raw_z = gyro_with_error_time(4, :);
+
+total_sample = min(length(time_acc), length(time_gyro));
+time_acc = time_acc(1:total_sample);
+time_gyro = time_gyro(1:total_sample);
+accel_raw_x = accel_raw_x(1:total_sample);
+accel_raw_y = accel_raw_y(1:total_sample);
+accel_raw_z = accel_raw_z(1:total_sample);
+gyro_raw_x = gyro_raw_x(1:total_sample);
+gyro_raw_y = gyro_raw_y(1:total_sample);
+gyro_raw_z = gyro_raw_z(1:total_sample);
+
+offset_acc_x = 0.02;
+offset_acc_y = 0.015;
+offset_acc_z = 0.01;
+offset_gyro_x = 0.05;
+offset_gyro_y = 0.04;
+offset_gyro_z = 0.06;
+
+% a_xp = accel_raw_x;
+% a_yp = accel_raw_y;
+% a_zp = accel_raw_z;
+% omega_x = gyro_raw_x;
+% omega_y = gyro_raw_y;
+% omega_z = gyro_raw_z;
+a_xp = accel_raw_x - offset_acc_x;
+a_yp = accel_raw_y - offset_acc_y;
+a_zp = accel_raw_z - offset_acc_z;
+omega_x = gyro_raw_x - offs;
+omega_y = gyro_raw_y;
+omega_z = gyro_raw_z;
+
+save('Preprocessed_Data.mat', 'a_xp', 'a_yp', 'a_zp', 'omega_x', 'omega_y', 'omega_z', 'time_acc', 'time_gyro');

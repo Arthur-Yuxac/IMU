@@ -1,14 +1,14 @@
 clear; clc;
 
 g = 9.81;
-fs = 888;
+fs = 250;
 dt = 1/fs;
 static_duration = 10;
 static_points = 20;
 w_rot = 2*pi;
 
 points_per_static = round(static_duration * fs);
-rotation_points = 0.5 * fs;
+rotation_points = 0.2 * fs;
 
 total_static_points = static_points * points_per_static;
 num_rotations = static_points - 1;
@@ -81,7 +81,7 @@ for static_idx = 1:static_points
         R = quat2rotm(q');
         
         accel_ideal(:, current_idx) = (R * [0; 0; -1]);
-        gyro_ideal(:, current_idx) = current_axis * w_rot;
+        gyro_ideal(:, current_idx) = current_axis * w_rot * 180 / pi;
         
         current_idx = current_idx + 1;
         if current_idx > total_points, break; end
@@ -89,10 +89,14 @@ for static_idx = 1:static_points
 end
 
 accel_noise = accel_noise_std * randn(3, total_points);
-accel_with_error = inv(accel_T) * inv(diag(accel_K)) * (accel_ideal + accel_bias) + accel_noise;
+accel_with_error = inv(accel_T) * inv(diag(accel_K)) * accel_ideal + accel_bias + accel_noise;
 
+% --------------------------修改处--------------------------
+% 按文献模型修正陀螺仪误差施加顺序：ω^S = (T^g K^g)⁻¹ ω^O - (b^g + 漂移) + 噪声
 gyro_noise = gyro_noise_std * randn(3, total_points);
-gyro_with_error = inv(gyro_T) * inv(diag(gyro_K)) * (gyro_ideal + gyro_bias + gyro_drift) + gyro_noise;
+gyro_error_matrix = gyro_T * diag(gyro_K);
+gyro_with_error = inv(gyro_error_matrix) * gyro_ideal + (gyro_bias + gyro_drift) + gyro_noise;
+% ----------------------------------------------------------
 
 accel_ideal_time = [time_stamp; accel_ideal];
 accel_with_error_time = [time_stamp; accel_with_error];
