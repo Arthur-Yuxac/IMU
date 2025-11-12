@@ -1,4 +1,4 @@
-clear; clc; close all;
+% clear; clc; close all;
 
 load('Preprocessed_Data.mat');
 total_sample = length(time_gyro);
@@ -6,7 +6,7 @@ omega_x = omega_x(1:total_sample) ;
 omega_y = omega_y(1:total_sample);
 omega_z = omega_z(1:total_sample);
 time_gyro = time_gyro(1:total_sample);
-dt = 1 / 250;
+dt = 1 / fs;
 
 load('Static_Detection_Result.mat');
 s_filter = s_filter(1:total_sample);
@@ -19,6 +19,9 @@ T_a = acc_calib_result.T_a;
 K_a = acc_calib_result.K_a;
 b_a = acc_calib_result.b_a;
 calib_acc = acc_calib_result.calib_acc(:, 1:total_sample);
+
+global iter_residuals;
+iter_residuals = [];  % 初始化
 
 init_long_qs_start = 0;
 init_long_qs_end = 0;
@@ -44,6 +47,9 @@ b_g = [b_g_x; b_g_y; b_g_z];
 omega_x_hat = omega_x - b_g_x;
 omega_y_hat = omega_y - b_g_y;
 omega_z_hat = omega_z - b_g_z;
+% omega_x_hat = (omega_x - b_g_x) * pi / 180;
+% omega_y_hat = (omega_y - b_g_y) * pi / 180;
+% omega_z_hat = (omega_z - b_g_z) * pi / 180;
 
 fprintf('陀螺仪偏置估计完成：b_g = [%.6f, %.6f, %.6f]\n', b_g_x, b_g_y, b_g_z);
 
@@ -82,8 +88,8 @@ end
 fprintf('构建静态区间信息矩阵：%d列（与代价函数输入格式一致）\n', num_static);
 
 theta_pr_gyro = [1, 0, 0, 0, 1, 0, 0, 0, 1];
-lb = [0.95, -0.02, -0.02, -0.02, 0.95, -0.02, -0.02, -0.02, 0.95];
-ub = [1.05,  0.02,  0.02,  0.02, 1.05,  0.02,  0.02,  0.02, 1.05];
+lb = [0.9, -0.02, -0.02, -0.02, 0.9, -0.02, -0.02, -0.02, 0.9];
+ub = [1.1,  0.02,  0.02,  0.02, 1.1,  0.02,  0.02,  0.02, 1.1];
 
 option = optimset(...
     'TolX', 1e-7, ...
@@ -109,7 +115,7 @@ T_g = [1, theta_pr_gyro(2), theta_pr_gyro(3);
 
 K_g = diag([theta_pr_gyro(1), theta_pr_gyro(5), theta_pr_gyro(9)]);
 
-omega_hat = [omega_x_hat; omega_y_hat; omega_z_hat] * pi / 180;
+omega_hat = [omega_x_hat; omega_y_hat; omega_z_hat];
 calib_omega = T_g * K_g * omega_hat;
 
 residuals = gyroCostFunctLSQNONLINUsingOnlyTheFilter(theta_pr_gyro, QS_dt_calib_info_matrix, omega_x_hat, omega_y_hat, omega_z_hat, dt);
@@ -157,67 +163,83 @@ title('陀螺仪标定残差验证（代价函数输出结果）');
 grid on; grid minor;
 
 function [res_vector] = gyroCostFunctLSQNONLINUsingOnlyTheFilter(E, QS_dt_info_matrix, omega_x_hat, omega_y_hat, omega_z_hat, dt)
-
-omega_hat = [omega_x_hat; omega_y_hat; omega_z_hat];
-
-misalignmentMatrix = [1, E(2), E(3); E(4), 1, E(6); E(7), E(8), 1];
-scalingMatrix = diag([E(1), E(5), E(9)]);
-
-omega_bar = misalignmentMatrix*scalingMatrix*omega_hat;
-
-omega_x = omega_bar(1,:);
-omega_y = omega_bar(2,:);
-omega_z = omega_bar(3,:);
-
-vector = zeros(3,5);
-
-for pr = 1:size(QS_dt_info_matrix, 2) - 1
+    omega_hat = [omega_x_hat; omega_y_hat; omega_z_hat];
     
-    vector((pr-1)*3 + 1:(pr)*3, 1) = QS_dt_info_matrix(4:6,pr);
-    vector((pr-1)*3 + 1:(pr)*3, 5) = QS_dt_info_matrix(4:6,pr + 1);
-    gyroUnbiasUncalibratedValues = [omega_x(QS_dt_info_matrix(2,pr) + 1:QS_dt_info_matrix(1,pr + 1) - 1); omega_y(QS_dt_info_matrix(2,pr) + 1:QS_dt_info_matrix(1,pr + 1) - 1); omega_z(QS_dt_info_matrix(2,pr) + 1:QS_dt_info_matrix(1,pr + 1) - 1)];
-    R = rotationRK4(gyroUnbiasUncalibratedValues, dt); 
-
-    vector((pr-1)*3 + 1:(pr)*3, 2:4) = R;
+    misalignmentMatrix = [1, E(2), E(3); E(4), 1, E(6); E(7), E(8), 1];
+    scalingMatrix = diag([E(1), E(5), E(9)]);
     
+    omega_bar = misalignmentMatrix * scalingMatrix * omega_hat;
+    
+    omega_x = omega_bar(1,:);
+    omega_y = omega_bar(2,:);
+    omega_z = omega_bar(3,:);
+    
+    num_pr = size(QS_dt_info_matrix, 2) - 1;
+    vector = zeros(3 * num_pr, 5);
+    
+    
+    for pr = 1:size(QS_dt_info_matrix, 2) - 1
+        vector((pr-1)*3 + 1:(pr)*3, 1) = QS_dt_info_matrix(4:6, pr);
+        
+        gyro_idx_start = QS_dt_info_matrix(2, pr) + 1;
+        gyro_idx_end = QS_dt_info_matrix(1, pr + 1) - 1;
+        gyroUnbiasUncalibratedValues = [
+            omega_x(gyro_idx_start:gyro_idx_end);
+            omega_y(gyro_idx_start:gyro_idx_end);
+            omega_z(gyro_idx_start:gyro_idx_end)
+        ];
+        
+        R = rotationRK4(gyroUnbiasUncalibratedValues, dt);
+        
+        vector((pr-1)*3 + 1:(pr)*3, 2:4) = R;
+        vector((pr-1)*3 + 1:(pr)*3, 5) = QS_dt_info_matrix(4:6, pr + 1);
+    end
+    
+    residuals = zeros(num_pr, 1);
+    for i = 1:num_pr
+        start_vec = vector((i-1)*3 + 1:(i)*3, 1);
+        end_vec = vector((i-1)*3 + 1:(i)*3, 5);
+        R = vector((i-1)*3 + 1:(i)*3, 2:4);
+        
+        start_norm = norm(start_vec);
+        end_norm = norm(end_vec);
+        v = (end_vec / end_norm) - R * (start_vec / start_norm);
+        
+        residuals(i, 1) = norm(v);
+    end
+    res_vector = residuals;
 end
 
-residuals = zeros(length(vector(:,1))/3, 1);
+function R = rotationRK4(gyro_data, dt)
+    gyro_data = gyro_data * pi / 180;
 
-for i = 1:length(vector(:,1))/3    
-    v = vector((i-1)*3 + 1:(i)*3, 5)/(vector((i-1)*3 + 1, 5)^2 + vector((i-1)*3 + 2, 5)^2 + vector((i)*3, 5)^2)^(1/2) -...
-    vector((i-1)*3 + 1:(i)*3, 2:4)*vector((i-1)*3 + 1:(i)*3, 1)/(vector((i-1)*3 + 1, 5)^2 + vector((i-1)*3 + 2, 5)^2 + vector((i)*3, 5)^2)^(1/2);
-    v = v';
-    residuals(i,1) = (v(1)^2 + v(2)^2 + v(3)^2)^(1/2);    
-end
-res_vector = residuals;
-end
-
-
-
-function [R] = rotationRK4(gyro_data, dt)
-q = [1; 0; 0; 0];
-num_samples = size(gyro_data, 2);
-
-    for i = 1:num_samples
+    q = fromOmegaToQ(gyro_data(:, 1), dt)';
+    num_samples = size(gyro_data, 2);
+    
+    for i = 2:num_samples 
         w = gyro_data(:, i);
-        Omega = [0, -w(1), -w(2), -w(3);
-                w(1), 0, w(3), -w(2);
-                w(2), -w(3), 0, w(1);
-                w(3), w(2), -w(1), 0];
-    
+        
+        Omega = [
+            0, -w(1), -w(2), -w(3);
+            w(1), 0, w(3), -w(2);
+            w(2), -w(3), 0, w(1);
+            w(3), w(2), -w(1), 0
+        ];
+        
         k1 = 0.5 * Omega * q;
         k2 = 0.5 * Omega * (q + k1 * dt / 2);
         k3 = 0.5 * Omega * (q + k2 * dt / 2);
         k4 = 0.5 * Omega * (q + k3 * dt);
-    
+        
         q = q + (k1 + 2*k2 + 2*k3 + k4) * dt / 6;
         q = q / norm(q);
     end
-
-w = q(1); x = q(2); y = q(3); z = q(4);
-R = [1 - 2*y^2 - 2*z^2, 2*x*y - 2*z*w, 2*x*z + 2*y*w;
-     2*x*y + 2*z*w, 1 - 2*x^2 - 2*z^2, 2*y*z - 2*x*w;
-     2*x*z - 2*y*w, 2*y*z + 2*x*w, 1 - 2*x^2 - 2*y^2];
+    
+    w = q(1); x = q(2); y = q(3); z = q(4);
+    R = [
+        1-2*y^2-2*z^2,   2*x*y-2*z*w,   2*x*z+2*y*w;
+        2*x*y+2*z*w,   1-2*x^2-2*z^2,   2*y*z-2*x*w;
+        2*x*z-2*y*w,     2*y*z+2*x*w, 1-2*x^2-2*y^2
+    ];
+    R = inv(R);
 end
-

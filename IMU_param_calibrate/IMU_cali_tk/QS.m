@@ -6,7 +6,7 @@ a_xp = a_xp(1:total_sample);
 a_yp = a_yp(1:total_sample);
 a_zp = a_zp(1:total_sample);
 
-w_d = fs+1;
+w_d = 2*(fs+1);
 half_w_d = floor(w_d / 2);
 max_times_the_var = 10;
 init_static_samples = fs * 3;
@@ -58,7 +58,7 @@ for times_the_var = 1 : max_times_the_var
 end
 
 [min_res, min_idx] = min(res_norm_vector(10, :));
-threshold_opt = 3 * res_norm_vector(11, min_idx);  %判断静态条件，可放缩
+threshold_opt = 5 * res_norm_vector(11, min_idx);  %判断静态条件，可放缩
 s_filter = zeros(1, total_sample);
 for i = half_w_d : (total_sample - half_w_d)
     if s_square(i) < threshold_opt

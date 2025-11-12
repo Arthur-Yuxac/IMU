@@ -45,7 +45,7 @@ gyro_T = [1 0.008 0.004;
           0.003 1 0.005; 
           0.002 0.001 1];
 gyro_noise_std = 0.001;
-gyro_drift_rate = 0.001;
+gyro_drift_rate = 0.00001;
 
 gyro_drift = gyro_drift_rate * cumsum(dt * ones(3, total_points));
 

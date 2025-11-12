@@ -1,4 +1,4 @@
-clear; clc; close all;
+% clear; clc; close all;
 
 load('Preprocessed_Data.mat');
 load('Static_Detection_Result.mat');
