@@ -1,14 +1,14 @@
 clear; clc;
 
 g = 9.81;
-fs = 250;
+fs = 800;
 dt = 1/fs;
 static_duration = 10;
 static_points = 20;
 w_rot = 2*pi;
 
 points_per_static = round(static_duration * fs);
-rotation_points = 0.2 * fs;
+rotation_points = 0.2*fs;
 
 total_static_points = static_points * points_per_static;
 num_rotations = static_points - 1;
@@ -55,7 +55,7 @@ for static_idx = 1:static_points
     fprintf('开始第 %d 个静态阶段，持续 %d 秒...\n', static_idx, static_duration);
     
     R = quat2rotm(q');
-    accel_g_ideal = (R * [0; 0; -1]);
+    accel_g_ideal = (R' * [0; 0; -1]);
     
     for i = 1:points_per_static
         accel_ideal(:, current_idx) = accel_g_ideal;
@@ -80,7 +80,7 @@ for static_idx = 1:static_points
         
         R = quat2rotm(q');
         
-        accel_ideal(:, current_idx) = (R * [0; 0; -1]);
+        accel_ideal(:, current_idx) = (R' * [0; 0; -1]);
         gyro_ideal(:, current_idx) = current_axis * w_rot * 180 / pi;
         
         current_idx = current_idx + 1;
@@ -130,15 +130,15 @@ figure('Color', 'w', 'Position', [100 300 1000 600]);
 subplot(3,1,1);
 plot(time_stamp, gyro_ideal(1,:), 'b-', 'LineWidth', 0.8);
 hold on; plot(time_stamp, gyro_with_error(1,:), 'r-', 'LineWidth', 0.5);
-xlabel('时间(s)'); ylabel('X轴角速度(rad/s)'); grid on; legend('理想', '带误差');
+xlabel('时间(s)'); ylabel('X轴角速度(dps)'); grid on; legend('理想', '带误差');
 subplot(3,1,2);
 plot(time_stamp, gyro_ideal(2,:), 'g-', 'LineWidth', 0.8);
 hold on; plot(time_stamp, gyro_with_error(2,:), 'r-', 'LineWidth', 0.5);
-xlabel('时间(s)'); ylabel('Y轴角速度(rad/s)'); grid on;
+xlabel('时间(s)'); ylabel('Y轴角速度(dps)'); grid on;
 subplot(3,1,3);
 plot(time_stamp, gyro_ideal(3,:), 'b-', 'LineWidth', 0.8);
 hold on; plot(time_stamp, gyro_with_error(3,:), 'r-', 'LineWidth', 0.5);
-xlabel('时间(s)'); ylabel('Z轴角速度(rad/s)'); grid on;
+xlabel('时间(s)'); ylabel('Z轴角速度(dps)'); grid on;
 sgtitle('陀螺仪各轴时序对比(含零漂和噪声)');
 
 save('imu_rotation_data_with_errors.mat', ...
