@@ -1,7 +1,7 @@
 clear; clc;
 
 g = 9.81;
-fs = 800;
+fs = 800; %fs=250 better
 dt = 1/fs;
 static_duration = 10;
 static_points = 20;

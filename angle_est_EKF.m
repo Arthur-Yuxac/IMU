@@ -32,7 +32,7 @@ for i = 1:N
     % 加速度计补偿：去零偏→刻度与轴间耦合校正
     accel_compensated(:,i) = calib_mat_a * (accel(:,i) - b_a);
     % 陀螺仪补偿：去零偏→刻度与轴间耦合校正
-    gyro_compensated(:,i) = calib_mat_g * (gyro(:,i) - b_g);
+    gyro_compensated(:,i) = calib_mat_g * (gyro(:,i) - b_g)*pi/180;
 end
 
 
@@ -148,7 +148,7 @@ for i = 1:N
     if update_enable
         % 计算预测重力向量
         C_pred = quat2rotmat(q_pred);
-        g_hat_body = C_pred' * [0; 0; g];
+        g_hat_body = C_pred' * [0; 0; -g];
         
         % 观测残差
         y = (a / a_norm) - (g_hat_body / norm(g_hat_body));
@@ -190,7 +190,7 @@ end
 % 5. 结果输出与可视化
 fprintf('\n===== 优化后EKF姿态解算结果 =====\n');
 fprintf('平均采样频率: %.2f Hz | 数据点: %d\n', avg_freq, N);
-fprintf('最终姿态角(deg): 滚转=%.2f, 俯仰=%.2f, 偏航=%.2f\n', ...
+fprintf('最终姿态角(deg): 滚转=%.2f, 俯仰=%.2f, 横摆=%.2f\n', ...
         rad2deg(euler_est(1,end)), rad2deg(euler_est(2,end)), rad2deg(euler_est(3,end)));
 
 
@@ -199,4 +199,4 @@ figure;
 subplot(3,1,1); plot(time, rad2deg(euler_est(1,:))); title('滚转角(deg)'); grid on;
 subplot(3,1,2); plot(time, rad2deg(euler_est(2,:))); title('俯仰角(deg)'); grid on;
 subplot(3,1,3); plot(time, rad2deg(euler_est(3,:))); title('偏航角(deg)'); grid on;
-sgtitle('优化后EKF姿态估计');
+sgtitle('EKF姿态估计');
