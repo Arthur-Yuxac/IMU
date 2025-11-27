@@ -1,3 +1,5 @@
+close all;clear;clc;
+
 % 1. 加载数据与参数
 % load('IMU_1015_1549_Recorder1_20251015165305.mat');  % 加载IMU原始数据
 % data_generate;
