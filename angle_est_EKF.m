@@ -1,13 +1,13 @@
 % 1. 加载数据与参数
 % load('IMU_1015_1549_Recorder1_20251015165305.mat');  % 加载IMU原始数据
-data_generate;
+% data_generate;
+generateData_43;
 % load('IMU_1107_1549_Recorder1_20251107141152.mat');
-load('./IMU_param_calibrate/IMU_cali_tk/Accelerometer_Calib_Result.mat');
-load('./IMU_param_calibrate/IMU_cali_tk/Gyroscope_Calib_Result.mat');
 
-% 校准参数提取
-T_a = acc_calib_result.T_a;   K_a = acc_calib_result.K_a;   b_a = acc_calib_result.b_a;
-T_g = gyro_calib_result.T_g;   K_g = gyro_calib_result.K_g;   b_g = gyro_calib_result.b_g;
+% load('./IMU_param_calibrate/IMU_cali_tk/Accelerometer_Calib_Result.mat');
+% load('./IMU_param_calibrate/IMU_cali_tk/Gyroscope_Calib_Result.mat');
+% T_a = acc_calib_result.T_a;   K_a = acc_calib_result.K_a;   b_a = acc_calib_result.b_a;
+% T_g = gyro_calib_result.T_g;   K_g = gyro_calib_result.K_g;   b_g = gyro_calib_result.b_g;
 
 % 时间间隔计算（使用实际间隔而非均值）
 N = length(time);
@@ -21,12 +21,12 @@ avg_freq = 1/mean(dt(2:end));  % 平均采样频率
 
 
 
-% 2. IMU误差补偿（优化校准矩阵应用）
+% 2. IMU误差补偿
 accel_compensated = zeros(3, N);
 gyro_compensated = zeros(3, N);
-% 预计算校准矩阵逆（提高效率）
-calib_mat_a = pinv(T_a * K_a);
-calib_mat_g = pinv(T_g * K_g);
+% 预计算校准矩阵逆
+calib_mat_a = T_a * K_a;
+calib_mat_g = T_g * K_g;
 
 for i = 1:N
     % 加速度计补偿：去零偏→刻度与轴间耦合校正
@@ -39,15 +39,15 @@ end
 % 3. EKF参数配置（优化初始状态与噪声参数）
 % 初始状态优化：利用静止初始加速度估计姿态
 x = [1;0;0;0; 0;0;0];  % [四元数; 陀螺零偏]
-if N >= 5  % 用前5个点平滑初始加速度
-    a0 = mean(accel_compensated(:,1:5), 2);
-    if norm(a0) > 0.5  % 确保有效重力测量
-        roll0 = atan2(a0(2), a0(3));          % 滚转角
-        pitch0 = atan2(-a0(1), norm(a0(2:3))); % 俯仰角
-        yaw0 = 0;                             % 偏航角初始为0
-        x(1:4) = euler2quat(roll0, pitch0, yaw0);  % 初始四元数
-    end
-end
+% if N >= 5  % 用前5个点平滑初始加速度
+%     a0 = mean(accel_compensated(:,1:5), 2);
+%     if norm(a0) > 0.5  % 确保有效重力测量
+%         roll0 = atan2(a0(2), a0(3));          % 滚转角
+%         pitch0 = atan2(-a0(1), norm(a0(2:3))); % 俯仰角
+%         yaw0 = 0;                             % 偏航角初始为0
+%         x(1:4) = euler2quat(roll0, pitch0, yaw0);  % 初始四元数
+%     end
+% end
 
 % 协方差矩阵初始化（基于传感器手册参数）
 P = eye(7);
@@ -62,17 +62,17 @@ Q_base(1:4,1:4) = (gyro_noise_density^2) * eye(4);
 Q_base(5:7,5:7) = (gyro_random_walk^2) * eye(3);
 
 % 测量噪声（加速度计，动态调整）
-acc_noise_density = 0.01 * 9.81;     % 加速度计噪声密度 (m/s²/√Hz)
+acc_noise_density = 0.01;     % 加速度计噪声密度 (m/s²/√Hz)
 R_base = (acc_noise_density^2) * eye(3);
 
 
-% 4. EKF主循环（优化积分方法与观测策略）
+% 4. EKF主循环
 q_est = zeros(4, N);     % 估计四元数
 euler_est = zeros(3, N); % 估计欧拉角(rad)
 bg_est = zeros(3, N);    % 估计陀螺零偏
 g = 9.81;                % 重力加速度
 
-% 定义四元数导数函数（核心：根据角速度计算四元数变化率）
+% 定义四元数导数函数
 quat_deriv = @(q, w) 0.5 * [
     0, -w(1), -w(2), -w(3);
     w(1), 0, w(3), -w(2);
@@ -82,10 +82,10 @@ quat_deriv = @(q, w) 0.5 * [
 
 
 for i = 1:N
-    a = accel_compensated(:,i);  % 补偿后加速度
-    w = gyro_compensated(:,i);   % 补偿后角速度
+    a = accel_compensated(:,i); 
+    w = gyro_compensated(:,i);
     current_dt = dt(i);
-    if current_dt <= 0  % 处理无效时间间隔
+    if current_dt <= 0 
         current_dt = mean(dt(2:end));
     end
 
@@ -100,36 +100,31 @@ for i = 1:N
     % w_clean = w - bg - bg_temp;  % 去零偏+温度补偿后的角速度
     w_clean = w - bg;
 
-
-    % 预测步骤（RK4积分优化四元数更新）
-    % RK4四阶积分：k1~k4为四个阶段的导数，加权平均更新
-    k1 = quat_deriv(q, w_clean);  % 阶段1：初始点导数
-    k2 = quat_deriv(q + k1 * current_dt/2, w_clean);  % 阶段2：中间点1导数
-    k3 = quat_deriv(q + k2 * current_dt/2, w_clean);  % 阶段3：中间点2导数
-    k4 = quat_deriv(q + k3 * current_dt, w_clean);     % 阶段4：终点导数
+    k1 = quat_deriv(q, w_clean); 
+    k2 = quat_deriv(q + k1 * current_dt/2, w_clean);  
+    k3 = quat_deriv(q + k2 * current_dt/2, w_clean); 
+    k4 = quat_deriv(q + k3 * current_dt, w_clean); 
     
-    % RK4更新：q_pred = q + (k1 + 2*k2 + 2*k3 + k4) * dt / 6
     q_pred = q + (k1 + 2*k2 + 2*k3 + k4) * current_dt / 6;
-    q_pred = q_pred / norm(q_pred);  % 四元数归一化（关键：保持单位长度）
+    q_pred = q_pred / norm(q_pred); 
 
-    % 零偏预测（随机游走模型，同前）
+    % 零偏预测
     bg_pred = bg;
 
-    % 状态转移矩阵F（近似雅可比，适配RK4积分）
+    % 状态转移矩阵F
     F = eye(7);
-    % 四元数部分：基于角速度的反对称矩阵近似
     Omega = [0, -w_clean(1), -w_clean(2), -w_clean(3);
              w_clean(1), 0, w_clean(3), -w_clean(2);
              w_clean(2), -w_clean(3), 0, w_clean(1);
              w_clean(3), w_clean(2), -w_clean(1), 0];
-    F(1:4,1:4) = eye(4) + 0.5 * Omega * current_dt;  % 保留一阶近似（协方差预测够用）
-    % 四元数对零偏的导数（简化）
+    F(1:4,1:4) = eye(4) + 0.5 * Omega * current_dt; 
+    % 四元数对零偏的导数
     F(1:4,5:7) = -0.5 * [0, -current_dt, 0;
                          current_dt, 0, 0;
                          0, 0, -current_dt;
                          0, 0, current_dt];
 
-    % 过程噪声Q（随dt动态调整，同前）
+    % 过程噪声Q
     Q = Q_base;
     Q(1:4,1:4) = Q(1:4,1:4) * current_dt;
     Q(5:7,5:7) = Q(5:7,5:7) * current_dt;
@@ -139,7 +134,7 @@ for i = 1:N
     P_pred = F * P * F' + Q;
 
 
-    % 更新步骤（动态权重调整，同前）
+    % 更新步骤
     a_norm = norm(a);
     g_norm = g;
     dynamic_ratio = abs(a_norm - g_norm) / g_norm;
@@ -153,7 +148,7 @@ for i = 1:N
         % 观测残差
         y = (a / a_norm) - (g_hat_body / norm(g_hat_body));
 
-        % 观测矩阵H（同前）
+        % 观测矩阵H
         q0 = q_pred(1); q1 = q_pred(2); q2 = q_pred(3); q3 = q_pred(4);
         Hq = [ -2*q2*g,   2*q3*g,  -2*q0*g,   2*q1*g;
                 2*q1*g,   2*q0*g,   2*q3*g,   2*q2*g;
@@ -200,3 +195,5 @@ subplot(3,1,1); plot(time, rad2deg(euler_est(1,:))); title('滚转角(deg)'); gr
 subplot(3,1,2); plot(time, rad2deg(euler_est(2,:))); title('俯仰角(deg)'); grid on;
 subplot(3,1,3); plot(time, rad2deg(euler_est(3,:))); title('偏航角(deg)'); grid on;
 sgtitle('EKF姿态估计');
+
+save('euler_est_ekf.mat', 'euler_est');
